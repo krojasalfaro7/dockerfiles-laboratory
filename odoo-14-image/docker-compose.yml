@@ -1,0 +1,13 @@
+# Author: 4PIOT / Kevin Rojas <krojas.alfaro7@gmail.com> 
+
+version: "3.7"
+services:
+
+    erp:
+        image: krojasalfaro/odoo_14
+        restart: always
+        build:
+            context: ./Dockerfile
+
+
+
