@@ -1,0 +1,300 @@
+# Author: 4PIOT / Kevin Rojas <krojas.alfaro7@gmail.com> 
+
+version: "3.7"
+services:
+
+    # Nginx and Reverse Proxy
+    nginx-proxy:
+        image: jwilder/nginx-proxy
+        restart: always
+        ports:
+            - "80:80"
+            - "443:443"
+        volumes:
+            - /var/run/docker.sock:/tmp/docker.sock:ro
+            - ./certs:/etc/nginx/certs:ro
+            - ./vhostd:/etc/nginx/vhost.d
+            # - ./html:/usr/share/nginx/html
+            - ${WEB_CLIENT_BUILD_PATH}:/usr/share/nginx/html
+            - ./nginx-proxy-conf/proxy.conf:/etc/nginx/proxy.conf
+            - ./nginx-proxy-conf/conf.d:/etc/nginx/conf.d
+        labels: 
+            - com.github.jrcs.letsencrypt_nginx_proxy_companion.nginx_proxy
+        networks:
+            4piotnet:
+
+    # SSL
+    # letsencrypt:
+    #     image: jrcs/letsencrypt-nginx-proxy-companion
+    #     restart: always
+    #     environment:
+    #         - DEFAULT_EMAIL=${LETSENCRYPT_EMAIL}
+    #         - NGINX_PROXY_CONTAINER=nginx-proxy
+    #     volumes:
+    #         - ./certs:/etc/nginx/certs:rw
+    #         - ./vhostd:/etc/nginx/vhost.d
+    #         - ./html:/usr/share/nginx/html
+    #         - /var/run/docker.sock:/var/run/docker.sock:ro
+    #     networks:
+    #         4piotnet:
+        
+  # API v1
+    api_v1:
+        image: api_v1
+        restart: always
+        build:
+            dockerfile: ${DOCKERFILE_API_V1}
+            context: ${CONTEXT_API_V1}
+        volumes:
+            - ${CONTEXT_API_V1}:/api_v1
+            - /api_v1/node_modules
+            - ${CONTEXT_API_V1}/uploads:/api_v1/uploads # Files
+        environment:
+            - MODO=${MODO}
+            - API_PORT=${API_V1_PORT}
+            - API_SOCKET_PORT=${API_V1_SOCKET_PORT}
+            - API_HOST=0.0.0.0
+            - HOST_MYSQL=${HOST_MYSQL}
+            - USER_MYSQL=${USER_MYSQL}
+            - PASS_MYSQL=${PASS_MYSQL}
+            - DB_MYSQL=${DB_MYSQL}
+            - DB_MYSQL_2=${DB_MYSQL_2}
+            - BD_MONGO=${MONGODB_CNN}
+        links:
+            - db_mongo
+            - db_mysql
+        networks:
+            4piotnet:
+
+    api_v2:
+        image: api_v2
+        restart: always
+        build:
+            dockerfile: ${DOCKERFILE_API_V2}
+            context: ${CONTEXT_API_V2}
+        volumes:
+            - ${CONTEXT_API_V2}:/api_v2
+            - /api_v2/node_modules
+        environment:
+            - MODO=${MODO}
+            - API_PORT=${API_V2_PORT}
+            - API_SOCKET_PORT=${API_V2_SOCKET_PORT}
+            - API_HOST=0.0.0.0
+            - APP_ODOO_URL=${APP_ODOO_URL}
+            - POSTGRES_DB_ODOO=${POSTGRES_DB_ODOO}
+            - POSTGRES_USER=${POSTGRES_USER}
+            - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+            - HOST_MYSQL=${HOST_MYSQL}
+            - USER_MYSQL=${USER_MYSQL}
+            - PASS_MYSQL=${PASS_MYSQL}
+            - DB_MYSQL=${DB_MYSQL}
+            - DB_MYSQL_2=${DB_MYSQL_2}
+            - MONGODB_CNN=${MONGODB_CNN}
+        links:
+            - db_mongo
+            - db_mysql
+            - erp
+        networks:
+            4piotnet:
+
+    api_v3:
+        image: api_v3
+        restart: always
+        build:
+            dockerfile: ${DOCKERFILE_API_V3}
+            context: ${CONTEXT_API_V3}
+        volumes:
+            - ${CONTEXT_API_V3}:/api_v3
+        # ports:
+        #     - ${API_V3_EXTERNAL_PORT}:8000
+        environment:
+            - MODO=${MODO}
+            - API_PORT=${API_V3_PORT}
+            - API_SOCKET_PORT=${API_V3_SOCKET_PORT}
+            - APP_ODOO_URL=${APP_ODOO_URL}
+            - HOST_POSTGRES=${HOST_POSTGRES}
+            - POSTGRES_DB_ODOO=${POSTGRES_DB_ODOO}
+            - POSTGRES_USER=${POSTGRES_USER}
+            - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+            - HOST_MYSQL=${HOST_MYSQL}
+            - USER_MYSQL=${USER_MYSQL}
+            - PASS_MYSQL=${PASS_MYSQL}
+            - DB_MYSQL=${DB_MYSQL}
+            - DB_MYSQL_2=${DB_MYSQL_2}
+            - MONGODB_CNN=${MONGODB_CNN}
+        links:
+            - db_mongo
+            - db_mysql
+            - erp
+        networks:
+            4piotnet:
+
+    # API-SCHEDULE CRONJOBS
+    api_schedule:
+        image: api_schedule
+        restart: always
+        build:
+            dockerfile: ${DOCKERFILE_API_SCHEDULE}
+            context: ${CONTEXT_API_SCHEDULE}
+        volumes:
+            - ${CONTEXT_API_SCHEDULE}:/api_schedule
+            - /api_schedule/node_modules
+        environment:
+            - MODO=${MODO}
+            - API_PORT=${API_SCHEDULE_PORT}
+            - API_HOST=0.0.0.0
+            - HOST_MYSQL=${HOST_MYSQL}
+            - USER_MYSQL=${USER_MYSQL}
+            - PASS_MYSQL=${PASS_MYSQL}
+            - DB_MYSQL=${DB_MYSQL}
+            - DB_MYSQL_2=${DB_MYSQL_2}
+            - MONGODB_CNN=${MONGODB_CNN}
+            - INELCOM_URL=${INELCOM_URL}
+            - APP_SERVER_URL=${API_V1_URL}
+            - APP_SERVER_PRO_URL=${API_V2_URL}
+            - USER_BACKEND_ODOO=${USER_BACKEND_ODOO}
+            - PASS_BACKEND_ODOO=${PASS_BACKEND_ODOO}
+            - API_V3=${API_V3}
+            - API_V3_EXTERNAL=${API_V3_EXTERNAL}
+        links:
+            - db_mongo
+            - db_mysql
+            - db_postgres
+            - api_v1
+            - api_v2
+            - api_v3
+        networks:
+            4piotnet:
+
+    erp:
+        image: odoo:14.0
+        restart: always
+        build:
+            context: ${CONTEXT_ERP}
+        volumes:
+            - ${ODOO_ADDONS}:/mnt/extra-addons
+            - ${ODOO_DEV}:/mnt/extra-addons-dev
+            - ${ODOO_CONF}:/etc/odoo/odoo.conf
+            - odoo-web-data:/var/lib/odoo
+        depends_on:
+            - db_postgres
+        environment:
+            - HOST=db_postgres
+            - PASSWORD=${ODOO_PASSWORD}
+        networks:
+            4piotnet:
+
+    web_client_v1:
+        image: krojasalfaro/web_client_v1
+        restart: always
+        volumes:
+            - ${CONTEXT_WEB_CLIENT_V1}:/var/www/html/
+        environment: 
+            - MODO=${MODO}
+            - VIRTUAL_HOST=${VIRTUAL_HOST_WEB_CLIENT_V1}
+            - LETSENCRYPT_HOST=${VIRTUAL_HOST_WEB_CLIENT_V1}
+            - LETSENCRYPT_EMAIL=${LETSENCRYPT_EMAIL}
+            - ACME_CA_URI=${ACME_CA_URI}
+            - HOST_MYSQL=${HOST_MYSQL}
+            - USER_MYSQL=${USER_MYSQL}
+            - PASS_MYSQL=${PASS_MYSQL}
+            - DB_MYSQL=${DB_MYSQL}
+            - DB_MYSQL_2=${DB_MYSQL_2}
+            - USER_BACKEND_ODOO=${USER_BACKEND_ODOO}
+            - PASS_BACKEND_ODOO=${PASS_BACKEND_ODOO}
+            - APP_SERVER_URL=${API_V1_URL_EXTERNAL}
+            - APP_SERVER_PRO_URL=${API_V2_URL_EXTERNAL}
+            - APP_SCHEDULE_URL=${API_SCHEDULE_URL_EXTERNAL}
+            - APP_CLIENT_URL=${WEB_CLIENT_URL_EXTERNAL}
+            - APP_ODOO_URL=${ERP_URL_EXTERNAL}
+            - ERP_URL_BASE=${ERP_URL_BASE}
+            - API_V3=${API_V3}
+            - API_V3_EXTERNAL=${API_V3_EXTERNAL}
+        links:
+            - api_v1
+            - api_v2
+            - api_schedule
+            - db_mysql
+        networks:
+            4piotnet:
+
+    qbic:
+        image: qbic
+        restart: always
+        build:
+            dockerfile: ${DOCKERFILE_QBIC}
+            context: ${CONTEXT_WEB_CLIENT_V1}
+        ports:
+            - ${PORT_QBIC}:6050        
+        environment:
+            - MODO=${MODO}
+            - HOST_MYSQL=${HOST_MYSQL}
+            - USER_MYSQL=${USER_MYSQL}
+            - PASS_MYSQL=${PASS_MYSQL}
+            - DB_MYSQL=${DB_MYSQL}
+            - DB_MYSQL_2=${DB_MYSQL_2}
+            - PORT=${PORT_QBIC}
+            - JDBC_URI=${JDBC_URI}
+            - JDBC_URI_DESA=${JDBC_URI_DESA}
+            - USER_MYSQL_DESA=${USER_MYSQL_DESA}
+            - PASS_MYSQL_DESA=${PASS_MYSQL_DESA}
+        networks:
+            4piotnet:
+                
+    # Mongo
+    db_mongo:
+        image: mongo:4.4.8-rc0-focal
+        restart: always
+        environment:
+            - MONGO_INITDB_ROOT_USERNAME=${MONGO_INITDB_ROOT_USERNAME}
+            - MONGO_INITDB_ROOT_PASSWORD=${MONGO_INITDB_ROOT_PASSWORD}
+            - MONGO_DB_USERNAME=${MONGO_DB_USERNAME}
+            - MONGO_DB_PASSWORD=${MONGO_DB_PASSWORD}
+            - MONGO_DB=${MONGO_DB}
+        volumes:
+            - ./mongo:/home/mongodb
+            - ./mongo/init-db.d/:/docker-entrypoint-initdb.d/
+            - /data/db:/data/db # Ruta del sistema opertivo del host donde se guardará la información
+        ports:
+            - ${EXTERNAL_PORT}:27017
+        networks:
+            4piotnet:
+
+    db_postgres:
+        image: postgres:13
+        restart: always
+        ports:
+            - ${PORT_EXTERNAL_POSTGRESQL}:5432
+        volumes:
+            - odoo-db-data:/var/lib/postgresql/data
+        environment:
+            - POSTGRES_USER=${POSTGRES_USER}
+            - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+            - POSTGRES_DB=${POSTGRES_DB}
+            - PGDATA=/var/lib/postgresql/data/pgdata
+        networks:
+            4piotnet:
+
+    db_mysql:
+        image: mysql:8
+        restart: always
+        command: --default-authentication-plugin=mysql_native_password
+        environment:
+            - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+            - MYSQL_USER=${USER_MYSQL}
+            - MYSQL_PASSWORD=${PASS_MYSQL}
+        ports:
+            - ${PORT_EXTERNAL_MYSQL}:3306
+        volumes:
+            - mysql-db-data:/var/lib/mysql
+        command: --sql_mode="STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION"
+        networks:
+            4piotnet:
+
+volumes:
+    mysql-db-data:
+    odoo-web-data:
+    odoo-db-data:
+
+networks:
+    4piotnet:
